@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GameGateway = void 0;
 const roomService = __importStar(require("../domain/room-service.js"));
 const raceEngine = __importStar(require("../domain/race-engine.js"));
+const tugEngine = __importStar(require("../domain/tug-engine.js"));
 /**
  * Game Gateway — routes client events to domain services and dispatches results.
  * Owns the connection registry (connectionId ↔ playerId mapping).
@@ -47,10 +48,16 @@ class GameGateway {
     connectionToPlayer = new Map();
     // playerId → connectionId
     playerToConnection = new Map();
+    // Lobby subscribers: connectionIds that want room list updates, keyed by gameType
+    lobbySubscribers = new Map(); // gameType → Set<connectionId>
     constructor(transport) {
         this.transport = transport;
-        // Register grace period callback
-        raceEngine.setOnGraceExpired((roomId, result) => {
+        // Register grace period callback for tap-race
+        raceEngine.setOnGraceExpired((_roomId, result) => {
+            this.dispatchResult(result);
+        });
+        // Register tick broadcast callback for tug-war
+        tugEngine.setOnTickBroadcast((_roomId, result) => {
             this.dispatchResult(result);
         });
     }
@@ -58,8 +65,6 @@ class GameGateway {
     // IGatewayHandler implementation
     // ============================================================
     onConnect(connectionId) {
-        // Connection established, but no player identity yet.
-        // Identity is established on room.create/room.join with sessionPlayerId.
         console.log(`[Gateway] Connection opened: ${connectionId}`);
     }
     onMessage(connectionId, event) {
@@ -77,15 +82,25 @@ class GameGateway {
                 this.handleStart(connectionId, event);
                 break;
             case "race.tap":
-                this.handleTap(connectionId, event);
+                this.handleRaceTap(connectionId, event);
+                break;
+            case "tug.tap":
+                this.handleTugTap(connectionId, event);
                 break;
             case "room.leave":
                 this.handleLeave(connectionId, event);
+                break;
+            case "room.list":
+                this.handleRoomList(connectionId, event);
                 break;
         }
     }
     onDisconnect(connectionId) {
         const playerId = this.connectionToPlayer.get(connectionId);
+        // Remove from lobby subscribers
+        for (const [, subscribers] of this.lobbySubscribers) {
+            subscribers.delete(connectionId);
+        }
         if (!playerId) {
             console.log(`[Gateway] Unknown connection disconnected: ${connectionId}`);
             return;
@@ -103,20 +118,25 @@ class GameGateway {
         if (roomId) {
             const room = roomService.getRoom(roomId);
             if (room && room.status === "waiting") {
-                // Countdown was cancelled by handleDisconnect (status reverted to waiting)
                 raceEngine.cancelCountdown(roomId);
             }
         }
         this.dispatchResult(result);
+        // Notify lobby subscribers since room state changed
+        if (result.stateChanged) {
+            this.broadcastRoomLists();
+        }
     }
     // ============================================================
     // Event Handlers
     // ============================================================
     handleCreate(connectionId, event) {
-        const { sessionPlayerId, name, maxPlayers } = event.payload;
+        const { sessionPlayerId, name, maxPlayers, gameType } = event.payload;
         // Bind connection to player
         this.bindConnection(connectionId, sessionPlayerId);
-        const result = roomService.createRoom(sessionPlayerId, name, maxPlayers);
+        // Remove from lobby subscribers (player is now in a room)
+        this.removeFromLobbySubscribers(connectionId);
+        const result = roomService.createRoom(sessionPlayerId, name, maxPlayers, gameType);
         // Set connectionId on the player in the room
         if (result.stateChanged) {
             const roomId = roomService.getPlayerRoom(sessionPlayerId);
@@ -125,17 +145,27 @@ class GameGateway {
             }
         }
         this.dispatchResult(result);
+        // Notify lobby subscribers since a new room was created
+        if (result.stateChanged) {
+            this.broadcastRoomLists();
+        }
     }
     handleJoin(connectionId, event) {
         const { sessionPlayerId, roomId, name } = event.payload;
         // Bind connection to player
         this.bindConnection(connectionId, sessionPlayerId);
+        // Remove from lobby subscribers
+        this.removeFromLobbySubscribers(connectionId);
         const result = roomService.joinRoom(sessionPlayerId, roomId, name);
         // Set connectionId on the player in the room
         if (result.stateChanged) {
             roomService.setPlayerConnection(roomId, sessionPlayerId, connectionId);
         }
         this.dispatchResult(result);
+        // Notify lobby subscribers since room player count changed
+        if (result.stateChanged) {
+            this.broadcastRoomLists();
+        }
     }
     handleReady(connectionId, event) {
         const playerId = this.connectionToPlayer.get(connectionId);
@@ -155,33 +185,54 @@ class GameGateway {
             this.dispatchResult(validationError);
             return;
         }
-        // Start countdown
+        const room = roomService.getRoom(roomId);
+        if (!room)
+            return;
+        // Start countdown — works for both game types
         const countdownResult = raceEngine.startCountdown(roomId, 
         // onTick
         (rid, value) => {
-            const room = roomService.getRoom(rid);
-            if (!room)
+            const r = roomService.getRoom(rid);
+            if (!r)
                 return;
-            const connectionIds = room.players
+            const connectionIds = r.players
                 .filter((p) => p.isConnected && p.connectionId)
                 .map((p) => p.connectionId);
             this.transport.broadcast(connectionIds, {
-                type: "race.countdown",
+                type: "game.countdown",
                 payload: { value },
             });
         }, 
-        // onComplete
+        // onComplete — branch by game type
         (rid) => {
-            const racingResult = raceEngine.startRacing(rid);
-            this.dispatchResult(racingResult);
+            const r = roomService.getRoom(rid);
+            if (!r)
+                return;
+            if (r.gameType === "tap-race") {
+                const racingResult = raceEngine.startRacing(rid);
+                this.dispatchResult(racingResult);
+            }
+            else if (r.gameType === "tug-war") {
+                const tugResult = tugEngine.initTugWar(rid);
+                this.dispatchResult(tugResult);
+            }
         });
         this.dispatchResult(countdownResult);
+        // Notify lobby subscribers since room is no longer waiting
+        this.broadcastRoomLists();
     }
-    handleTap(connectionId, event) {
+    handleRaceTap(connectionId, event) {
         const playerId = this.connectionToPlayer.get(connectionId);
         if (!playerId)
             return;
         const result = raceEngine.handleTap(event.payload.roomId, playerId);
+        this.dispatchResult(result);
+    }
+    handleTugTap(connectionId, event) {
+        const playerId = this.connectionToPlayer.get(connectionId);
+        if (!playerId)
+            return;
+        const result = tugEngine.handleTugTap(event.payload.roomId, playerId);
         this.dispatchResult(result);
     }
     handleLeave(connectionId, event) {
@@ -193,6 +244,30 @@ class GameGateway {
         // Clean up connection mapping
         this.connectionToPlayer.delete(connectionId);
         this.playerToConnection.delete(playerId);
+        // Notify lobby subscribers since room player count changed
+        if (result.stateChanged) {
+            this.broadcastRoomLists();
+        }
+    }
+    handleRoomList(connectionId, event) {
+        const { gameType } = event.payload;
+        // Subscribe this connection to lobby updates for this game type
+        if (!this.lobbySubscribers.has(gameType)) {
+            this.lobbySubscribers.set(gameType, new Set());
+        }
+        // Remove from other game type subscriptions
+        for (const [gt, subscribers] of this.lobbySubscribers) {
+            if (gt !== gameType) {
+                subscribers.delete(connectionId);
+            }
+        }
+        this.lobbySubscribers.get(gameType).add(connectionId);
+        // Send current room list
+        const rooms = roomService.listRooms(gameType);
+        this.transport.send(connectionId, {
+            type: "room.listResult",
+            payload: { rooms },
+        });
     }
     // ============================================================
     // Connection Registry
@@ -202,7 +277,6 @@ class GameGateway {
         const oldConnection = this.playerToConnection.get(playerId);
         if (oldConnection && oldConnection !== connectionId) {
             this.connectionToPlayer.delete(oldConnection);
-            // Don't close the old socket — it may already be closed
         }
         // If this connection was bound to a different player, clean it up
         const oldPlayer = this.connectionToPlayer.get(connectionId);
@@ -211,6 +285,27 @@ class GameGateway {
         }
         this.connectionToPlayer.set(connectionId, playerId);
         this.playerToConnection.set(playerId, connectionId);
+    }
+    removeFromLobbySubscribers(connectionId) {
+        for (const [, subscribers] of this.lobbySubscribers) {
+            subscribers.delete(connectionId);
+        }
+    }
+    // ============================================================
+    // Lobby Broadcast
+    // ============================================================
+    /** Broadcast updated room lists to all lobby subscribers */
+    broadcastRoomLists() {
+        for (const [gameType, subscribers] of this.lobbySubscribers) {
+            if (subscribers.size === 0)
+                continue;
+            const rooms = roomService.listRooms(gameType);
+            const connectionIds = Array.from(subscribers);
+            this.transport.broadcast(connectionIds, {
+                type: "room.listResult",
+                payload: { rooms },
+            });
+        }
     }
     // ============================================================
     // Outbox Dispatch

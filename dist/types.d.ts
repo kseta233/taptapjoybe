@@ -1,7 +1,8 @@
-export type RoomStatus = "waiting" | "countdown" | "racing" | "finished";
+export type GameType = "tap-race" | "tug-war";
+export type RoomStatus = "waiting" | "countdown" | "playing" | "finished";
 export type Room = {
     roomId: string;
-    gameType: "tap-race";
+    gameType: GameType;
     status: RoomStatus;
     hostPlayerId: string;
     players: PlayerState[];
@@ -12,6 +13,7 @@ export type Room = {
     createdAt: number;
     startedAt?: number;
     finishedAt?: number;
+    tugState?: TugWarState;
 };
 export type PlayerState = {
     playerId: string;
@@ -24,6 +26,18 @@ export type PlayerState = {
     finishOrder?: number;
     finishedAtMs?: number;
     joinedAt: number;
+    team?: "left" | "right";
+};
+export type TugWarState = {
+    ropePosition: number;
+    leftForce: number;
+    rightForce: number;
+    timeLeftMs: number;
+    leftTeam: string[];
+    rightTeam: string[];
+    leftTotalTaps: number;
+    rightTotalTaps: number;
+    winnerTeam?: "left" | "right" | "draw";
 };
 export type PlayerView = {
     playerId: string;
@@ -32,10 +46,11 @@ export type PlayerView = {
     isReady: boolean;
     progress: number;
     tapCount: number;
+    team?: "left" | "right";
 };
 export type RoomView = {
     roomId: string;
-    gameType: "tap-race";
+    gameType: GameType;
     status: RoomStatus;
     hostPlayerId: string;
     players: PlayerView[];
@@ -50,12 +65,39 @@ export type RacePlayerView = {
     finishOrder?: number;
     isConnected: boolean;
 };
+export type RoomListItem = {
+    roomId: string;
+    gameType: GameType;
+    hostName: string;
+    playerCount: number;
+    maxPlayers: number;
+    status: "waiting";
+};
+export type TugStateView = {
+    ropePosition: number;
+    timeLeftMs: number;
+    leftForce: number;
+    rightForce: number;
+};
+export type TugResultView = {
+    winnerTeam: "left" | "right" | "draw";
+    finalRopePosition: number;
+    leftTotalTaps: number;
+    rightTotalTaps: number;
+    players: Array<{
+        playerId: string;
+        name: string;
+        team: "left" | "right";
+        tapCount: number;
+    }>;
+};
 export type ClientEvent = {
     type: "room.create";
     payload: {
         sessionPlayerId: string;
         name: string;
         maxPlayers?: number;
+        gameType?: GameType;
     };
 } | {
     type: "room.join";
@@ -76,15 +118,26 @@ export type ClientEvent = {
         roomId: string;
     };
 } | {
+    type: "room.leave";
+    payload: {
+        roomId: string;
+    };
+} | {
+    type: "room.list";
+    payload: {
+        gameType: GameType;
+    };
+} | {
     type: "race.tap";
     payload: {
         roomId: string;
         clientTs?: number;
     };
 } | {
-    type: "room.leave";
+    type: "tug.tap";
     payload: {
         roomId: string;
+        clientTs?: number;
     };
 };
 export type ServerEvent = {
@@ -103,7 +156,12 @@ export type ServerEvent = {
     type: "room.state";
     payload: RoomView;
 } | {
-    type: "race.countdown";
+    type: "room.listResult";
+    payload: {
+        rooms: RoomListItem[];
+    };
+} | {
+    type: "game.countdown";
     payload: {
         value: number;
     };
@@ -117,6 +175,12 @@ export type ServerEvent = {
     payload: {
         rankings: RacePlayerView[];
     };
+} | {
+    type: "tug.state";
+    payload: TugStateView;
+} | {
+    type: "tug.finished";
+    payload: TugResultView;
 } | {
     type: "error";
     payload: {
@@ -153,4 +217,5 @@ export type DomainResult = {
 export declare function buildPlayerView(p: PlayerState): PlayerView;
 export declare function buildRoomView(room: Room): RoomView;
 export declare function buildRacePlayerView(p: PlayerState): RacePlayerView;
+export declare function buildRoomListItem(room: Room): RoomListItem;
 //# sourceMappingURL=types.d.ts.map

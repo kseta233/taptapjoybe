@@ -1,6 +1,6 @@
 import { GAME_CONFIG } from "../config.js";
-import type { Room, PlayerState, DomainResult } from "../types.js";
-import { ErrorCodes, buildRoomView } from "../types.js";
+import type { Room, PlayerState, DomainResult, GameType, RoomListItem } from "../types.js";
+import { ErrorCodes, buildRoomView, buildRoomListItem } from "../types.js";
 import { generateRoomId, nowMs } from "../utils.js";
 
 // In-memory room store
@@ -29,6 +29,22 @@ export function findPlayerInRoom(room: Room, playerId: string): PlayerState | un
   return room.players.find((p) => p.playerId === playerId);
 }
 
+/**
+ * List waiting rooms for a specific game type.
+ */
+export function listRooms(gameType: GameType): RoomListItem[] {
+  const result: RoomListItem[] = [];
+  for (const [, room] of rooms) {
+    if (room.gameType === gameType && room.status === "waiting") {
+      const connectedCount = room.players.filter((p) => p.isConnected).length;
+      if (connectedCount < room.maxPlayers) {
+        result.push(buildRoomListItem(room));
+      }
+    }
+  }
+  return result;
+}
+
 // ============================================================
 // Commands
 // ============================================================
@@ -36,7 +52,8 @@ export function findPlayerInRoom(room: Room, playerId: string): PlayerState | un
 export function createRoom(
   sessionPlayerId: string,
   name: string,
-  maxPlayers?: number
+  maxPlayers?: number,
+  gameType?: GameType
 ): DomainResult {
   // Check if player is already in another room
   const existingRoomId = playerRoomIndex.get(sessionPlayerId);
@@ -84,7 +101,7 @@ export function createRoom(
 
   const room: Room = {
     roomId,
-    gameType: "tap-race",
+    gameType: gameType ?? "tap-race",
     status: "waiting",
     hostPlayerId: sessionPlayerId,
     players: [player],
@@ -253,7 +270,7 @@ export function leaveRoom(roomId: string, playerId: string): DomainResult {
   const room = rooms.get(roomId);
   if (!room) return errorToPlayer(playerId, ErrorCodes.ROOM_NOT_FOUND, "Room not found");
 
-  // During countdown/racing/finished — leave is not allowed
+  // During countdown/playing/finished — leave is not allowed
   if (room.status !== "waiting") {
     return errorToPlayer(playerId, ErrorCodes.ROOM_ALREADY_STARTED, "Cannot leave during game");
   }
@@ -354,7 +371,7 @@ export function handleDisconnect(playerId: string): { roomId?: string; result: D
     };
   }
 
-  // During racing/finished — player stays but can't tap (effectively DNF)
+  // During playing/finished — player stays but can't tap (effectively DNF)
   return {
     roomId,
     result: {

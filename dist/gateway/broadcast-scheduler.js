@@ -30,7 +30,10 @@ class BroadcastScheduler {
     tick() {
         const rooms = (0, room_service_js_1.getAllRooms)();
         for (const [, room] of rooms) {
-            if (room.status !== "racing" || !room.dirtyProgress)
+            if (room.status !== "playing" || !room.dirtyProgress)
+                continue;
+            // Only broadcast race progress for tap-race rooms (tug-war handles its own broadcast)
+            if (room.gameType !== "tap-race")
                 continue;
             // Build progress view
             const players = room.players.map(types_js_1.buildRacePlayerView);

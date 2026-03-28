@@ -9,6 +9,7 @@ export declare class GameGateway implements IGatewayHandler {
     private transport;
     private connectionToPlayer;
     private playerToConnection;
+    private lobbySubscribers;
     constructor(transport: ITransport);
     onConnect(connectionId: string): void;
     onMessage(connectionId: string, event: ClientEvent): void;
@@ -17,9 +18,14 @@ export declare class GameGateway implements IGatewayHandler {
     private handleJoin;
     private handleReady;
     private handleStart;
-    private handleTap;
+    private handleRaceTap;
+    private handleTugTap;
     private handleLeave;
+    private handleRoomList;
     private bindConnection;
+    private removeFromLobbySubscribers;
+    /** Broadcast updated room lists to all lobby subscribers */
+    private broadcastRoomLists;
     /** Dispatch a DomainResult to the appropriate connections via transport */
     dispatchResult(result: DomainResult): void;
 }

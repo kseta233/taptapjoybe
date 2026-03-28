@@ -2,21 +2,23 @@
 // Domain Models (internal — never sent to client directly)
 // ============================================================
 
-export type RoomStatus = "waiting" | "countdown" | "racing" | "finished";
+export type GameType = "tap-race" | "tug-war";
+export type RoomStatus = "waiting" | "countdown" | "playing" | "finished";
 
 export type Room = {
   roomId: string;
-  gameType: "tap-race";
+  gameType: GameType;
   status: RoomStatus;
   hostPlayerId: string;
   players: PlayerState[];
   maxPlayers: number;
   finishProgress: number;
-  finishOrder: string[]; // ordered playerIds who finished
+  finishOrder: string[]; // ordered playerIds who finished (tap-race)
   dirtyProgress: boolean; // broadcast throttle flag
   createdAt: number;
   startedAt?: number;
   finishedAt?: number;
+  tugState?: TugWarState; // only for tug-war rooms
 };
 
 export type PlayerState = {
@@ -27,9 +29,23 @@ export type PlayerState = {
   isReady: boolean;
   progress: number;
   tapCount: number;
-  finishOrder?: number; // 1-indexed finish position
-  finishedAtMs?: number; // server timestamp when finished
+  finishOrder?: number; // 1-indexed finish position (tap-race)
+  finishedAtMs?: number; // server timestamp when finished (tap-race)
   joinedAt: number;
+  team?: "left" | "right"; // tug-war team assignment
+};
+
+// Tug of war physics state
+export type TugWarState = {
+  ropePosition: number; // -100 to +100
+  leftForce: number;
+  rightForce: number;
+  timeLeftMs: number;
+  leftTeam: string[]; // playerIds
+  rightTeam: string[];
+  leftTotalTaps: number;
+  rightTotalTaps: number;
+  winnerTeam?: "left" | "right" | "draw";
 };
 
 // ============================================================
@@ -43,11 +59,12 @@ export type PlayerView = {
   isReady: boolean;
   progress: number;
   tapCount: number;
+  team?: "left" | "right";
 };
 
 export type RoomView = {
   roomId: string;
-  gameType: "tap-race";
+  gameType: GameType;
   status: RoomStatus;
   hostPlayerId: string;
   players: PlayerView[];
@@ -64,17 +81,48 @@ export type RacePlayerView = {
   isConnected: boolean;
 };
 
+export type RoomListItem = {
+  roomId: string;
+  gameType: GameType;
+  hostName: string;
+  playerCount: number;
+  maxPlayers: number;
+  status: "waiting";
+};
+
+export type TugStateView = {
+  ropePosition: number;
+  timeLeftMs: number;
+  leftForce: number;
+  rightForce: number;
+};
+
+export type TugResultView = {
+  winnerTeam: "left" | "right" | "draw";
+  finalRopePosition: number;
+  leftTotalTaps: number;
+  rightTotalTaps: number;
+  players: Array<{
+    playerId: string;
+    name: string;
+    team: "left" | "right";
+    tapCount: number;
+  }>;
+};
+
 // ============================================================
 // Client → Server Events
 // ============================================================
 
 export type ClientEvent =
-  | { type: "room.create"; payload: { sessionPlayerId: string; name: string; maxPlayers?: number } }
+  | { type: "room.create"; payload: { sessionPlayerId: string; name: string; maxPlayers?: number; gameType?: GameType } }
   | { type: "room.join"; payload: { sessionPlayerId: string; roomId: string; name: string } }
   | { type: "room.ready"; payload: { roomId: string; isReady: boolean } }
   | { type: "room.start"; payload: { roomId: string } }
+  | { type: "room.leave"; payload: { roomId: string } }
+  | { type: "room.list"; payload: { gameType: GameType } }
   | { type: "race.tap"; payload: { roomId: string; clientTs?: number } }
-  | { type: "room.leave"; payload: { roomId: string } };
+  | { type: "tug.tap"; payload: { roomId: string; clientTs?: number } };
 
 // ============================================================
 // Server → Client Events
@@ -84,9 +132,12 @@ export type ServerEvent =
   | { type: "room.created"; payload: { roomId: string; playerId: string } }
   | { type: "room.joined"; payload: { roomId: string; playerId: string } }
   | { type: "room.state"; payload: RoomView }
-  | { type: "race.countdown"; payload: { value: number } }
+  | { type: "room.listResult"; payload: { rooms: RoomListItem[] } }
+  | { type: "game.countdown"; payload: { value: number } }
   | { type: "race.progress"; payload: { players: RacePlayerView[] } }
   | { type: "race.finished"; payload: { rankings: RacePlayerView[] } }
+  | { type: "tug.state"; payload: TugStateView }
+  | { type: "tug.finished"; payload: TugResultView }
   | { type: "error"; payload: { code: string; message: string } };
 
 // ============================================================
@@ -131,6 +182,7 @@ export function buildPlayerView(p: PlayerState): PlayerView {
     isReady: p.isReady,
     progress: p.progress,
     tapCount: p.tapCount,
+    team: p.team,
   };
 }
 
@@ -154,5 +206,17 @@ export function buildRacePlayerView(p: PlayerState): RacePlayerView {
     tapCount: p.tapCount,
     finishOrder: p.finishOrder,
     isConnected: p.isConnected,
+  };
+}
+
+export function buildRoomListItem(room: Room): RoomListItem {
+  const host = room.players.find((p) => p.playerId === room.hostPlayerId);
+  return {
+    roomId: room.roomId,
+    gameType: room.gameType,
+    hostName: host?.name ?? "Unknown",
+    playerCount: room.players.filter((p) => p.isConnected).length,
+    maxPlayers: room.maxPlayers,
+    status: "waiting",
   };
 }

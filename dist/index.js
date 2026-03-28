@@ -27,7 +27,8 @@ transport.start(gateway);
 broadcastScheduler.start();
 room_cleanup_js_1.roomCleanup.start();
 // Start listening
-server.listen(config_js_1.GAME_CONFIG.PORT, "127.0.0.1", () => {
+// Start listening
+server.listen(config_js_1.GAME_CONFIG.PORT, "0.0.0.0", () => {
     console.log(`[TapTapJoy] Server running on port ${config_js_1.GAME_CONFIG.PORT}`);
     console.log(`[TapTapJoy] Health check: http://localhost:${config_js_1.GAME_CONFIG.PORT}/health`);
     console.log(`[TapTapJoy] WebSocket: ws://localhost:${config_js_1.GAME_CONFIG.PORT}`);

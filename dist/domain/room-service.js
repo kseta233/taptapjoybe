@@ -4,6 +4,7 @@ exports.getRoom = getRoom;
 exports.getAllRooms = getAllRooms;
 exports.getPlayerRoom = getPlayerRoom;
 exports.findPlayerInRoom = findPlayerInRoom;
+exports.listRooms = listRooms;
 exports.createRoom = createRoom;
 exports.joinRoom = joinRoom;
 exports.setReady = setReady;
@@ -34,10 +35,25 @@ function getPlayerRoom(playerId) {
 function findPlayerInRoom(room, playerId) {
     return room.players.find((p) => p.playerId === playerId);
 }
+/**
+ * List waiting rooms for a specific game type.
+ */
+function listRooms(gameType) {
+    const result = [];
+    for (const [, room] of rooms) {
+        if (room.gameType === gameType && room.status === "waiting") {
+            const connectedCount = room.players.filter((p) => p.isConnected).length;
+            if (connectedCount < room.maxPlayers) {
+                result.push((0, types_js_1.buildRoomListItem)(room));
+            }
+        }
+    }
+    return result;
+}
 // ============================================================
 // Commands
 // ============================================================
-function createRoom(sessionPlayerId, name, maxPlayers) {
+function createRoom(sessionPlayerId, name, maxPlayers, gameType) {
     // Check if player is already in another room
     const existingRoomId = playerRoomIndex.get(sessionPlayerId);
     if (existingRoomId) {
@@ -81,7 +97,7 @@ function createRoom(sessionPlayerId, name, maxPlayers) {
     };
     const room = {
         roomId,
-        gameType: "tap-race",
+        gameType: gameType ?? "tap-race",
         status: "waiting",
         hostPlayerId: sessionPlayerId,
         players: [player],
@@ -219,7 +235,7 @@ function leaveRoom(roomId, playerId) {
     const room = rooms.get(roomId);
     if (!room)
         return errorToPlayer(playerId, types_js_1.ErrorCodes.ROOM_NOT_FOUND, "Room not found");
-    // During countdown/racing/finished — leave is not allowed
+    // During countdown/playing/finished — leave is not allowed
     if (room.status !== "waiting") {
         return errorToPlayer(playerId, types_js_1.ErrorCodes.ROOM_ALREADY_STARTED, "Cannot leave during game");
     }
@@ -306,7 +322,7 @@ function handleDisconnect(playerId) {
             },
         };
     }
-    // During racing/finished — player stays but can't tap (effectively DNF)
+    // During playing/finished — player stays but can't tap (effectively DNF)
     return {
         roomId,
         result: {

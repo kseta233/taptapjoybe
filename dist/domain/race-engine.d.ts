@@ -1,8 +1,7 @@
 import type { DomainResult } from "../types.js";
 /**
  * Start the countdown sequence for a room.
- * Returns a DomainResult for each countdown tick (3, 2, 1, 0).
- * Calls `onCountdownComplete` when done.
+ * Works for both tap-race and tug-war.
  */
 export declare function startCountdown(roomId: string, onTick: (roomId: string, value: number) => void, onComplete: (roomId: string) => void): DomainResult;
 /**
@@ -10,7 +9,7 @@ export declare function startCountdown(roomId: string, onTick: (roomId: string, 
  */
 export declare function cancelCountdown(roomId: string): void;
 /**
- * Transition room to racing state.
+ * Transition room to playing state (tap-race).
  */
 export declare function startRacing(roomId: string): DomainResult;
 /**

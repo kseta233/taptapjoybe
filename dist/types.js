@@ -7,6 +7,7 @@ exports.ErrorCodes = void 0;
 exports.buildPlayerView = buildPlayerView;
 exports.buildRoomView = buildRoomView;
 exports.buildRacePlayerView = buildRacePlayerView;
+exports.buildRoomListItem = buildRoomListItem;
 // ============================================================
 // Error Codes
 // ============================================================
@@ -33,6 +34,7 @@ function buildPlayerView(p) {
         isReady: p.isReady,
         progress: p.progress,
         tapCount: p.tapCount,
+        team: p.team,
     };
 }
 function buildRoomView(room) {
@@ -54,6 +56,17 @@ function buildRacePlayerView(p) {
         tapCount: p.tapCount,
         finishOrder: p.finishOrder,
         isConnected: p.isConnected,
+    };
+}
+function buildRoomListItem(room) {
+    const host = room.players.find((p) => p.playerId === room.hostPlayerId);
+    return {
+        roomId: room.roomId,
+        gameType: room.gameType,
+        hostName: host?.name ?? "Unknown",
+        playerCount: room.players.filter((p) => p.isConnected).length,
+        maxPlayers: room.maxPlayers,
+        status: "waiting",
     };
 }
 //# sourceMappingURL=types.js.map

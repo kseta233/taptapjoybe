@@ -1,5 +1,5 @@
 export const GAME_CONFIG = {
-  // Game rules
+  // Tap Race rules
   MAX_TAPS_PER_SECOND: 20,
   FINISH_PROGRESS: 100,
   PROGRESS_PER_TAP: 1,
@@ -7,6 +7,14 @@ export const GAME_CONFIG = {
   MAX_PLAYERS: 4,
   MIN_PLAYERS_TO_START: 2,
   RACE_GRACE_PERIOD_MS: 10_000,
+
+  // Tug of War rules
+  TUG_MATCH_DURATION_MS: 60_000,
+  TUG_TICK_MS: 50,
+  TUG_ROPE_LIMIT: 100,
+  TUG_TAP_FORCE: 1,
+  TUG_FORCE_DECAY: 0.88,
+  TUG_MOVE_MULTIPLIER: 0.25,
 
   // Room lifecycle
   ROOM_IDLE_TTL_MS: 5 * 60 * 1000,

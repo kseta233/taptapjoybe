@@ -16,8 +16,7 @@ const countdownTimers = new Map();
 const graceTimers = new Map();
 /**
  * Start the countdown sequence for a room.
- * Returns a DomainResult for each countdown tick (3, 2, 1, 0).
- * Calls `onCountdownComplete` when done.
+ * Works for both tap-race and tug-war.
  */
 function startCountdown(roomId, onTick, onComplete) {
     const room = (0, room_service_js_1.getRoom)(roomId);
@@ -57,13 +56,13 @@ function cancelCountdown(roomId) {
     }
 }
 /**
- * Transition room to racing state.
+ * Transition room to playing state (tap-race).
  */
 function startRacing(roomId) {
     const room = (0, room_service_js_1.getRoom)(roomId);
     if (!room)
         return {};
-    room.status = "racing";
+    room.status = "playing";
     room.startedAt = (0, utils_js_1.nowMs)();
     // Reset all players for race
     for (const player of room.players) {
@@ -87,7 +86,7 @@ function handleTap(roomId, playerId) {
     const room = (0, room_service_js_1.getRoom)(roomId);
     if (!room)
         return errorToPlayer(playerId, types_js_1.ErrorCodes.ROOM_NOT_FOUND, "Room not found");
-    if (room.status !== "racing") {
+    if (room.status !== "playing") {
         return errorToPlayer(playerId, types_js_1.ErrorCodes.TAP_NOT_ALLOWED, "Race not active");
     }
     const player = room.players.find((p) => p.playerId === playerId);
@@ -147,7 +146,7 @@ function startGracePeriod(roomId) {
     const timer = setTimeout(() => {
         graceTimers.delete(roomId);
         const room = (0, room_service_js_1.getRoom)(roomId);
-        if (room && room.status === "racing") {
+        if (room && room.status === "playing") {
             const result = finishRace(room);
             // We need a way to dispatch this — use the onGraceExpired callback
             if (onGraceExpiredCallback) {

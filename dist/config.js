@@ -1,0 +1,24 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.GAME_CONFIG = void 0;
+exports.GAME_CONFIG = {
+    // Game rules
+    MAX_TAPS_PER_SECOND: 20,
+    FINISH_PROGRESS: 100,
+    PROGRESS_PER_TAP: 1,
+    COUNTDOWN_SECONDS: 3,
+    MAX_PLAYERS: 4,
+    MIN_PLAYERS_TO_START: 2,
+    RACE_GRACE_PERIOD_MS: 10_000,
+    // Room lifecycle
+    ROOM_IDLE_TTL_MS: 5 * 60 * 1000,
+    ROOM_FINISHED_TTL_MS: 2 * 60 * 1000,
+    CLEANUP_INTERVAL_MS: 30 * 1000,
+    // Broadcast
+    BROADCAST_INTERVAL_MS: 100,
+    // Transport
+    HEARTBEAT_INTERVAL_MS: 30_000,
+    HEARTBEAT_TIMEOUT_MS: 10_000,
+    PORT: Number(process.env.PORT) || 3001,
+};
+//# sourceMappingURL=config.js.map

@@ -1,0 +1,23 @@
+{
+  "name": "taptapjoybe",
+  "version": "1.0.0",
+  "description": "TapTapJoy multiplayer tap racing game server",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "zod": "^3.22.4",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "tsx": "^4.7.0",
+    "@types/ws": "^8.5.10",
+    "@types/node": "^20.11.0",
+    "@types/uuid": "^9.0.7"
+  }
+}

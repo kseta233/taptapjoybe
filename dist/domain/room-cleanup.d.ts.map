@@ -1,0 +1,1 @@
+{"version":3,"file":"room-cleanup.d.ts","sourceRoot":"","sources":["../../src/domain/room-cleanup.ts"],"names":[],"mappings":"AAKA;;;GAGG;AACH,cAAM,WAAW;IACf,OAAO,CAAC,QAAQ,CAA+B;IAE/C,KAAK,IAAI,IAAI;IAUb,IAAI,IAAI,IAAI;IAOZ,OAAO,CAAC,KAAK;CA0Cd;AAED,eAAO,MAAM,WAAW,aAAoB,CAAC"}
